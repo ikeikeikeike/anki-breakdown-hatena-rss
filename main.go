@@ -105,7 +105,7 @@ func newAnki() Anki {
 	}
 	return &anki{
 		cl:   cl,
-		host: "http://127.0.0.1:8765",
+		host: "http://127.0.0.1:8765", // Addon: https://foosoft.net/projects/anki-connect/
 	}
 }
 
@@ -127,10 +127,10 @@ type (
 )
 
 func (a *anki) AddNote(ctx context.Context, front, back, deck string, tags []string) (*addNoteResult, error) {
-	name := "AddNote"
+	name := "addNote"
 
 	data := addNoteData{
-		Action:  "addNote",
+		Action:  name,
 		Version: 6,
 		Params: addNoteParams{
 			Note: addInsideNote{
