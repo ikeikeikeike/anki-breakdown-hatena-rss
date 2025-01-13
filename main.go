@@ -81,10 +81,10 @@ func main() {
 
 		r, err := a.AddNote(ctx, front, item.Content, item.Categories)
 		switch {
+		case err != nil:
+			fmt.Printf("ERR: %+v\n", err) // simply
 		case r.Error == "":
 			fmt.Printf("OK: %+v\n", r) // simply
-		case err != nil:
-			fmt.Printf("NG: %+v\n", err) // simply
 		default:
 			fmt.Printf("NG: %+v\n", r) // simply
 		}
