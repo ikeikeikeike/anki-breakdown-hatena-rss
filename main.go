@@ -18,13 +18,15 @@ import (
 )
 
 type args struct {
-	URL string
+	URL  string
+	Deck string
 }
 
 func parseArgs() (*args, error) {
 	a := &args{}
 
 	flag.StringVar(&a.URL, "url", "", "e.g. https://b.hatena.ne.jp/ikeikeikeike/bookmark.rss")
+	flag.StringVar(&a.Deck, "deck", "Hatena", "Note's Deckname")
 	flag.Parse()
 
 	seen := make(map[string]bool)
@@ -80,15 +82,17 @@ func main() {
 			item.Description,
 		)
 
-		r, err := a.AddNote(ctx, front, item.Content, item.Categories)
+		r, err := a.AddNote(ctx, front, item.Content, args.Deck, item.Categories)
 		switch {
 		case err != nil:
-			log.Printf("ERR: %+v\n", err)
+			log.Printf("Err: %+v\n", err)
 		case r.Error == "":
 			log.Printf("OK: %+v\n", r)
 		default:
 			log.Printf("NG: %+v\n", r)
 		}
+
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -102,37 +106,35 @@ func newAnki() Anki {
 	return &anki{
 		cl:   cl,
 		host: "http://127.0.0.1:8765",
-		deck: "Hatena",
 	}
 }
 
 type (
 	// Anki core function
 	Anki interface {
-		AddNote(ctx context.Context, front, back string, tags []string) (*addNoteResult, error)
+		AddNote(ctx context.Context, front, back, deck string, tags []string) (*addNoteResult, error)
 	}
 
 	anki struct {
 		cl   *http.Client
 		host string
-		deck string
 	}
 
 	addNoteResult struct {
-		Result int    `json:"result"`
+		Result int64  `json:"result"`
 		Error  string `json:"error"`
 	}
 )
 
-func (a *anki) AddNote(ctx context.Context, front, back string, tags []string) (*addNoteResult, error) {
-	name := "Request"
+func (a *anki) AddNote(ctx context.Context, front, back, deck string, tags []string) (*addNoteResult, error) {
+	name := "AddNote"
 
 	data := addNoteData{
 		Action:  "addNote",
 		Version: 6,
 		Params: addNoteParams{
-			Note: addNoteNote{
-				DeckName:  a.deck,
+			Note: addInsideNote{
+				DeckName:  deck,
 				ModelName: "Basic",
 				Fields: addNoteFields{
 					Front: front,
@@ -142,7 +144,7 @@ func (a *anki) AddNote(ctx context.Context, front, back string, tags []string) (
 					AllowDuplicate: false,
 					DuplicateScope: "deck",
 					DuplicateScopeOptions: addNoteDuplicateScopeOptions{
-						DeckName:       a.deck,
+						DeckName:       deck,
 						CheckChildren:  false,
 						CheckAllModels: false,
 					},
@@ -241,7 +243,7 @@ type (
 		Fields   []string `json:"fields"`
 	}
 
-	addNoteNote struct {
+	addInsideNote struct {
 		DeckName  string           `json:"deckName"`
 		ModelName string           `json:"modelName"`
 		Fields    addNoteFields    `json:"fields"`
@@ -251,7 +253,7 @@ type (
 	}
 
 	addNoteParams struct {
-		Note addNoteNote `json:"note"`
+		Note addInsideNote `json:"note"`
 	}
 
 	addNoteData struct {
