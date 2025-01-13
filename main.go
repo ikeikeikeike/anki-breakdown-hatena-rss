@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -41,14 +42,14 @@ func main() {
 	// Arguments
 	args, err := parseArgs()
 	if err != nil {
-		panic(err) // Panic for simply script
+		log.Panic(err) // Panic is useful for the simply script
 	}
 	fp := gofeed.NewParser()
 	fp.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 	feed, err := fp.ParseURL(args.URL)
 	if err != nil {
-		panic(err) // Panic for simply script
+		log.Panic(err) // Panic is useful for the simply script
 	}
 	ctx := context.Background()
 
@@ -82,11 +83,11 @@ func main() {
 		r, err := a.AddNote(ctx, front, item.Content, item.Categories)
 		switch {
 		case err != nil:
-			fmt.Printf("ERR: %+v\n", err) // simply
+			log.Printf("ERR: %+v\n", err)
 		case r.Error == "":
-			fmt.Printf("OK: %+v\n", r) // simply
+			log.Printf("OK: %+v\n", r)
 		default:
-			fmt.Printf("NG: %+v\n", r) // simply
+			log.Printf("NG: %+v\n", r)
 		}
 	}
 }
