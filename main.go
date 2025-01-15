@@ -67,7 +67,6 @@ func main() {
 <p>%s</p>
 <br />
 <div style="text-align: left;">
-	<p>Bookmark: %s Users</p>
 	<p>Date: %s</p>
   <p>%s: %s</p>
 </div>
@@ -76,7 +75,6 @@ func main() {
 			item.Title,
 			strings.Join(item.Categories, " "),
 			item.Link,
-			safeGetBookmarkCount(item.Extensions),
 			item.PublishedParsed.In(time.Local).Format("2006-01-02 15:04:05"),
 			item.Author.Name,
 			item.Description,
