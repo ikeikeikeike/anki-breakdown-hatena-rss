@@ -3,18 +3,23 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"golang.org/x/xerrors"
+
+	"github.com/cockroachdb/pebble"
 	"github.com/mmcdole/gofeed"
 	ext "github.com/mmcdole/gofeed/extensions"
-	"golang.org/x/xerrors"
 )
 
 type args struct {
@@ -53,10 +58,34 @@ func main() {
 	if err != nil {
 		log.Panic(err) // Panic is useful for the simply script
 	}
+	db, err := mewPebble()
+	if err != nil {
+		log.Panic(err) // Panic is useful for the simply script
+	}
+	defer func() { _ = db.Close() }()
+
 	ctx := context.Background()
 
 	a := newAnki()
 	for _, item := range feed.Items {
+		key := pebbleKey(args.URL, args.Deck, item.Link)
+
+		value, closer, err := db.Get(key)
+		if err != nil && !xerrors.Is(err, pebble.ErrNotFound) {
+			log.Printf("Err DB Get: %+v\n", err)
+			continue
+		}
+		if closer != nil {
+			if err := closer.Close(); err != nil {
+				log.Printf("Err DB Closer: %+v\n", err)
+				continue
+			}
+		}
+		if len(value) != 0 {
+			log.Printf("NG Dup by: %s:%s:%s\n", args.URL, args.Deck, item.Link)
+			continue
+		}
+
 		front := fmt.Sprintf(`
 <p>Break it down?</p>
 <hr />
@@ -67,6 +96,7 @@ func main() {
 <p>%s</p>
 <br />
 <div style="text-align: left;">
+	<p>Bookmark: %s Users</p>
 	<p>Date: %s</p>
   <p>%s: %s</p>
 </div>
@@ -75,21 +105,28 @@ func main() {
 			item.Title,
 			strings.Join(item.Categories, " "),
 			item.Link,
+			safeGetBookmarkCount(item.Extensions),
 			item.PublishedParsed.In(time.Local).Format("2006-01-02 15:04:05"),
 			item.Author.Name,
 			item.Description,
 		)
 
 		r, err := a.AddNote(ctx, front, item.Content, args.Deck, item.Categories)
-		switch {
-		case err != nil:
+		if err != nil {
 			log.Printf("Err: %+v\n", err)
-		case r.Error == "":
-			log.Printf("OK: %+v\n", r)
-		default:
+			continue
+		}
+		if r.Error != "" {
 			log.Printf("NG: %+v\n", r)
+			continue
 		}
 
+		if err := db.Set(key, []byte(fmt.Sprint(r.Result)), pebble.Sync); err != nil {
+			log.Printf("Err DB Write: %+v\n", err)
+			continue
+		}
+
+		log.Printf("OK: %+v\n", r)
 		time.Sleep(100 * time.Millisecond)
 	}
 }
@@ -260,3 +297,30 @@ type (
 		Params  addNoteParams `json:"params"`
 	}
 )
+
+// pebbleKey concatenates the input strings with a colon separator,
+// computes the SHA-256 hash of the resulting string, and returns
+// the hash as a byte slice.
+func pebbleKey(keys ...string) []byte {
+	// Concatenate the input strings with a colon separator
+	concatenated := strings.Join(keys, ":")
+	// Compute the SHA-256 hash of the concatenated string
+	hash := sha256.Sum256([]byte(concatenated))
+	// Return the hash as a byte slice
+	return hash[:]
+}
+
+func mewPebble() (*pebble.DB, error) {
+	path, err := os.UserHomeDir()
+	if err != nil {
+		return nil, xerrors.Errorf("pebble UserHomeDir: %w", err)
+	}
+	path = filepath.Join(path, ".cache/anki-breakdown-hatena-rss")
+
+	db, err := pebble.Open(path, &pebble.Options{})
+	if err != nil {
+		return nil, xerrors.Errorf("pebble Open: %w", err)
+	}
+
+	return db, nil
+}
